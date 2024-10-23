@@ -15,7 +15,6 @@ path = 'Images{}*'.format(os.sep)  # Use os.sep, Windows, linux have different p
 all_submissions = glob.glob('./src/*')
 os.makedirs('./results/', exist_ok=True)
 for idx,algo in enumerate(all_submissions):
-    # print("hi")
     print('****************\tRunning Awesome Stitcher developed by: {}  | {} of {}\t********************'.format(algo.split(os.sep)[-1],idx,len(all_submissions)))
     try:
         module_name = '{}_{}'.format(algo.split(os.sep)[-1],'stitcher')
@@ -41,4 +40,3 @@ for idx,algo in enumerate(all_submissions):
     except Exception as e:
         print('Oh No! My implementation encountered this issue\n\t{}'.format(e))
         print('\n\n')
-# print("hello")
