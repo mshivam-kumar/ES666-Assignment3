@@ -5,7 +5,6 @@ import os
 from src.JohnDoe import some_function
 from src.JohnDoe.some_folder import folder_func
 import numpy as np
-import cv2
 import numpy as np
 import os
 from scipy.signal import convolve2d
@@ -166,7 +165,6 @@ class PanaromaStitcher():
             points_B = np.float32([keypoints_B[m.trainIdx] for m in good_matches])
 
             # Compute the homography matrix
-            # homography, _ = cv2.findHomography(points_A, points_B, cv2.RANSAC, max_threshold)
             homography, _ = self.ransac_homography(points_A, points_B)
             return good_matches, homography
         return None, None
@@ -189,7 +187,7 @@ class PanaromaStitcher():
 
       # Define corners of the first image
       corners_A = np.array([[0, 0], [0, height_A], [width_A, height_A], [width_A, 0]], dtype='float32')
-      corners_A_transformed = cv2.perspectiveTransform(corners_A.reshape(-1, 1, 2), homography)
+      corners_A_transformed = self.perspective_transform(corners_A.reshape(-1, 1, 2), homography)
 
       # Prepare corners for image B
       corners_B = np.array([[0, 0], [0, height_B], [width_B, height_B], [width_B, 0]], dtype='float32')
@@ -213,7 +211,7 @@ class PanaromaStitcher():
                                           [0, 0, 1]])
 
       # Warp image_A to the new perspective
-      result_image = cv2.warpPerspective(image_A, homography_translation @ homography, (x_max - x_min, y_max - y_min))
+      result_image = self.perspective_transform(image_A, homography_translation @ homography)
 
       # Place image_B onto the warped image
       result_image[translation_dist[1]:translation_dist[1] + height_B, 
@@ -290,7 +288,20 @@ class PanaromaStitcher():
         
         return best_H, best_inliers
         
+    def perspective_transform(points, homography):
+        # Ensure points are in homogeneous coordinates
+        num_points = points.shape[0]
+        points_homogeneous = np.hstack((points, np.ones((num_points, 1))))  # Shape (N, 3)
+        
+        # Apply the homography transformation
+        transformed_homogeneous = homography @ points_homogeneous.T  # Shape (3, N)
+        
+        # Normalize the points by the last row (w')
+        w = transformed_homogeneous[2, :]  # Shape (N,)
+        transformed_cartesian = transformed_homogeneous[:2, :] / w  # Shape (2, N)
 
+        # Return the transformed points as (N, 2)
+        return transformed_cartesian.T  # Shape (N, 2)
     
         
     def say_hi(self):
