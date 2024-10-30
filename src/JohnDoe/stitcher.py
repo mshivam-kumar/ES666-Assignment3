@@ -69,7 +69,7 @@ class PanaromaStitcher():
             # result_image = self.warp_images(result_image, current_image, homography)
             result_gray_image=cv2.cvtColor(result_image, cv2.COLOR_BGR2GRAY)
             current_gray_image=cv2.cvtColor(current_image, cv2.COLOR_BGR2GRAY)
-            result_image,homography=self.stitch([result_image,current_image],[result_gray_image,current_image],SIFT_Detector)
+            result_image,homography=self.stitch([result_image,current_image],[result_gray_image,current_gray_image],SIFT_Detector)
         
         
         
