@@ -247,7 +247,6 @@ class PanaromaStitcher():
         img_right_mask = np.zeros((hr, wr), dtype="int")
         constant_width = 3 # constant width
         
-        # find the left image and right image mask region(Those not zero pixels)
         for i in range(hl):
             for j in range(wl):
                 if np.count_nonzero(img_left[i, j]) > 0:
