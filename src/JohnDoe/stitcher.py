@@ -6,10 +6,7 @@ import numpy as np
 import random
 from scipy.ndimage import affine_transform
 from scipy.linalg import lstsq
-
-
-
-    
+ 
 
 
 class PanaromaStitcher():
@@ -85,7 +82,7 @@ class PanaromaStitcher():
         matches = self.matchKeyPoint(key_points_1, descriptors_1, key_points_2, descriptors_2, threshold)
         
         # Step3 - fit the homography model with RANSAC algorithm
-        H = self.RANSAC_get_H(matches)
+        H = self.Ransac_Homography(matches)
 
         # Step4 - Warp image to create panoramic image
         warp_img = self.warp(imgs[0], imgs[1], H, blend)
@@ -122,7 +119,25 @@ class PanaromaStitcher():
         
         return good_matches
     
-    def RANSAC_get_H(self, matches):
+    
+    def solve_homography(self, kps_1, kps_2):
+        A = []
+        for i in range(len(kps_1)):
+            A.append([kps_1[i, 0], kps_1[i, 1], 1, 0, 0, 0, -kps_1[i, 0] * kps_2[i, 0], -kps_1[i, 1] * kps_2[i, 0], -kps_2[i, 0]])
+            A.append([0, 0, 0, kps_1[i, 0], kps_1[i, 1], 1, -kps_1[i, 0] * kps_2[i, 1], -kps_1[i, 1] * kps_2[i, 1], -kps_2[i, 1]])
+
+        # Solve system of linear equations Ah = 0 using SVD
+        u, sigma, vt = np.linalg.svd(A)
+        
+        # pick H from last line of vt
+        H = np.reshape(vt[8], (3, 3))
+        
+        # normalization, let H[2,2] equals to 1
+        H = (1/H.item(8)) * H
+        
+        return H
+    
+    def Ransac_Homography(self, matches):
         img1_kp = []
         img2_kp = []
         for kp1, kp2 in matches:
@@ -131,7 +146,6 @@ class PanaromaStitcher():
         img1_kp = np.array(img1_kp)
         img2_kp = np.array(img2_kp)
         
-        homography = Homography()
         threshold = 5
         iteration_num = 2000
         max_inliner_num = 0
@@ -139,7 +153,7 @@ class PanaromaStitcher():
         
         for iter in range(iteration_num):
             random_sample_idx = random.sample(range(len(matches)), 4)
-            H = homography.solve_homography(img1_kp[random_sample_idx], img2_kp[random_sample_idx])
+            H = self.solve_homography(img1_kp[random_sample_idx], img2_kp[random_sample_idx])
 
             # find the best Homography have the the maximum number of inlier
             inliner_num = 0
@@ -162,67 +176,7 @@ class PanaromaStitcher():
                 best_H = H
 
         return best_H
-                
-    def warp(self, img1, img2, H, blendType):
-        left_down = np.hstack(([0], [0], [1]))
-        left_up = np.hstack(([0], [img1.shape[0]-1], [1]))
-        right_down = np.hstack(([img1.shape[1]-1], [0], [1]))
-        right_up = np.hstack(([img1.shape[1]-1], [img1.shape[0]-1], [1]))
-        
-        warped_left_down = H @ left_down.T
-        warped_left_up = H @ left_up.T
-        warped_right_down =  H @ right_down.T
-        warped_right_up = H @ right_up.T
-
-        x1 = int(min(min(min(warped_left_down[0],warped_left_up[0]),min(warped_right_down[0], warped_right_up[0])), 0))
-        y1 = int(min(min(min(warped_left_down[1],warped_left_up[1]),min(warped_right_down[1], warped_right_up[1])), 0))
-        size = (img2.shape[1] + abs(x1), img2.shape[0] + abs(y1))
-
-        A = np.float32([[1, 0, -x1], [0, 1, -y1], [0, 0, 1]])
-        warped1 = cv2.warpPerspective(src=img1, M=A@H, dsize=size)
-        warped2 = cv2.warpPerspective(src=img2, M=A, dsize=size)
-        
-        blender = Blender()
-        if blendType == 'linearBlendingWithConstantWidth':
-            result = blender.linearBlendingWithConstantWidth([warped1, warped2])
-        else:
-            result = blender.linearBlending([warped1, warped2])
-        
-        return result
     
-    def say_hi(self):
-        print('Hi From John Doe...')
-
-    def do_something(self):
-        print("I am computer and I am doing something...")
-
-    def do_something_more(self):
-        print("Let me do something more...")
-
-class Homography:
-    def __init__(self):
-        pass
-    
-    def solve_homography(self, kps_1, kps_2):
-        A = []
-        for i in range(len(kps_1)):
-            A.append([kps_1[i, 0], kps_1[i, 1], 1, 0, 0, 0, -kps_1[i, 0] * kps_2[i, 0], -kps_1[i, 1] * kps_2[i, 0], -kps_2[i, 0]])
-            A.append([0, 0, 0, kps_1[i, 0], kps_1[i, 1], 1, -kps_1[i, 0] * kps_2[i, 1], -kps_1[i, 1] * kps_2[i, 1], -kps_2[i, 1]])
-
-        # Solve system of linear equations Ah = 0 using SVD
-        u, sigma, vt = np.linalg.svd(A)
-        
-        # pick H from last line of vt
-        H = np.reshape(vt[8], (3, 3))
-        
-        # normalization, let H[2,2] equals to 1
-        H = (1/H.item(8)) * H
-        
-        return H
-
-class Blender:
-    def __init__(self):
-        pass
     
     def linearBlending(self, imgs):
         '''
@@ -284,7 +238,7 @@ class Blender:
     def linearBlendingWithConstantWidth(self, imgs):
         '''
         linear Blending with Constat Width, avoiding ghost region
-        # you need to determine the size of constant with
+        # we need to determine the size of constant with
         '''
         img_left, img_right = imgs
         (hl, wl) = img_left.shape[:2]
@@ -311,7 +265,7 @@ class Blender:
                     overlap_mask[i, j] = 1
         
         # compute the alpha mask to linear blending the overlap region
-        alpha_mask = np.zeros((hr, wr)) # alpha value depend on left image
+        alpha_mask = np.zeros((hr, wr)) 
         for i in range(hr):
             minIdx = maxIdx = -1
             for j in range(wr):
@@ -354,3 +308,90 @@ class Blender:
                 else:
                     linearBlendingWithConstantWidth_img[i, j] = img_right[i, j]
         return linearBlendingWithConstantWidth_img
+
+                
+
+    def warp(self, img1, img2, H, blendType):
+        left_down = np.hstack(([0], [0], [1]))
+        left_up = np.hstack(([0], [img1.shape[0]-1], [1]))
+        right_down = np.hstack(([img1.shape[1]-1], [0], [1]))
+        right_up = np.hstack(([img1.shape[1]-1], [img1.shape[0]-1], [1]))
+
+        # Transform the corners using H
+        warped_left_down = H @ left_down.T
+        warped_left_up = H @ left_up.T
+        warped_right_down = H @ right_down.T
+        warped_right_up = H @ right_up.T
+
+        # Determine the size of the warped image
+        x1 = int(min(min(min(warped_left_down[0], warped_left_up[0]), min(warped_right_down[0], warped_right_up[0])), 0))
+        y1 = int(min(min(min(warped_left_down[1], warped_left_up[1]), min(warped_right_down[1], warped_right_up[1])), 0))
+        size = (img2.shape[1] + abs(x1), img2.shape[0] + abs(y1))
+
+        # Adjust the transformation to shift images into the new canvas size
+        A = np.float32([[1, 0, -x1], [0, 1, -y1], [0, 0, 1]])
+        transformed_H1 = A @ H
+        transformed_H2 = A
+
+        # warp perspective function
+        warped1 = self.warpPerspective(img1, transformed_H1, size)
+        warped2 = self.warpPerspective(img2, transformed_H2, size)
+
+        # Blending
+        if blendType == 'linearBlendingWithConstantWidth':
+            result = self.linearBlendingWithConstantWidth([warped1, warped2])
+        else:
+            result = self.linearBlending([warped1, warped2])
+
+        return result
+
+    def warpPerspective(self, src, M, dsize):
+        """ Custom implementation of warp perspective.
+            src: Source image
+            M: Homography matrix (3x3)
+            dsize: Size of the output image (width, height)
+        """
+        h, w = dsize[1], dsize[0]
+        dst = np.zeros((h, w, src.shape[2]), dtype=src.dtype)  # Output canvas
+        
+        M_inv = np.linalg.inv(M)  # Inverse transformation matrix
+        
+        for y in range(h):
+            for x in range(w):
+                # Map the destination pixel (x, y) back to source image
+                source_coords = M_inv @ np.array([x, y, 1])
+                source_x, source_y = source_coords[0] / source_coords[2], source_coords[1] / source_coords[2]
+                
+                # Bilinear interpolation for non-integer coordinates
+                if 0 <= source_x < src.shape[1] - 1 and 0 <= source_y < src.shape[0] - 1:
+                    x0, y0 = int(source_x), int(source_y)
+                    x_diff, y_diff = source_x - x0, source_y - y0
+
+                    # Interpolate
+                    top_left = src[y0, x0]
+                    top_right = src[y0, x0 + 1]
+                    bottom_left = src[y0 + 1, x0]
+                    bottom_right = src[y0 + 1, x0 + 1]
+                    
+                    pixel_value = (top_left * (1 - x_diff) * (1 - y_diff) +
+                                top_right * x_diff * (1 - y_diff) +
+                                bottom_left * (1 - x_diff) * y_diff +
+                                bottom_right * x_diff * y_diff)
+                    
+                    dst[y, x] = pixel_value
+
+        return dst
+
+    
+    def say_hi(self):
+        print('Hi From John Doe...')
+
+    def do_something(self):
+        print("I am computer and I am doing something...")
+
+    def do_something_more(self):
+        print("Let me do something more...")
+
+
+
+    
